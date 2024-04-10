@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "QuaTrEx"
+authors = [
+    { name = "Anders Winka", email = "awinka@iis.ee.ethz.ch" }
+    { name = "Leonard Deuschle", email = "dleonard@iis.ee.ethz.ch" }
+    { name = "Nicolas Vetsch", email = "vetschn@iis.ee.ethz.ch" },
+    { name = "Vincent Maillou", email = "vmaillou@iis.ee.ethz.ch" },
+    { name = "PhD. Alexandros Nikolaos Ziogas", email = "alziogas@iis.ee.ethz.ch" }
+    { name = "PhD. Jiang Cao", email = "jiang.cao@iis.ee.ethz.ch" }
+    { name = "Prof. PhD. Mathieu Luisier", email = "mluisier@iis.ee.ethz.ch" }
+]
+description = "Quantum Transport at the Exascale and beyond"
+license = { file = "LICENSE" }
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+keywords = ["Nano-TCAD", "Quantum Transport", "NEGF"]
+dynamic = ["version"]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pytest",
+    "pytest-cov",
+    "coverage",
+]
+
+[project.urls]
+Code = "https://github.com/vincent-maillou/QuaTrEx"
+
+[tool.setuptools.dynamic]
+version = { attr = "quatrex.__about__.__version__" }
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+testpaths = ["tests"]
+
+[tool.isort]
+profile = "black"

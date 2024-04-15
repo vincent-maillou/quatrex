@@ -27,9 +27,10 @@ keywords = ["Nano-TCAD", "Quantum Transport", "NEGF"]
 dynamic = ["version"]
 requires-python = ">=3.10"
 dependencies = [
-    "numpy",
+    "numpy>=1.23.2",
     "scipy",
     "matplotlib",
+    "pydantic",
     "pytest",
     "pytest-cov",
     "coverage",

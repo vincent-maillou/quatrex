@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "QuaTrEx"
 authors = [
-    { name = "Anders Winka", email = "awinka@iis.ee.ethz.ch" }
-    { name = "Leonard Deuschle", email = "dleonard@iis.ee.ethz.ch" }
+    { name = "Anders Winka", email = "awinka@iis.ee.ethz.ch" },
+    { name = "Leonard Deuschle", email = "dleonard@iis.ee.ethz.ch" },
     { name = "Nicolas Vetsch", email = "vetschn@iis.ee.ethz.ch" },
     { name = "Vincent Maillou", email = "vmaillou@iis.ee.ethz.ch" },
-    { name = "PhD. Alexandros Nikolaos Ziogas", email = "alziogas@iis.ee.ethz.ch" }
-    { name = "PhD. Jiang Cao", email = "jiang.cao@iis.ee.ethz.ch" }
-    { name = "Prof. PhD. Mathieu Luisier", email = "mluisier@iis.ee.ethz.ch" }
+    { name = "PhD. Alexandros Nikolaos Ziogas", email = "alziogas@iis.ee.ethz.ch" },
+    { name = "PhD. Jiang Cao", email = "jiang.cao@iis.ee.ethz.ch" },
+    { name = "Prof. PhD. Mathieu Luisier", email = "mluisier@iis.ee.ethz.ch" },
 ]
 description = "Quantum Transport at the Exascale and beyond"
 license = { file = "LICENSE" }
@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.urls]
-Code = "https://github.com/vincent-maillou/QuaTrEx"
+Code = "https://github.com/vincent-maillou/quatrex"
 
 [tool.setuptools.dynamic]
 version = { attr = "quatrex.__about__.__version__" }

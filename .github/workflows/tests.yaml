@@ -15,7 +15,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e .
+          python -m pip install -e .
         
       - name: Run tests
         run: |

@@ -7,7 +7,7 @@ from quatrex.core.config import QuatrexConfig
 from quatrex.core.subsystem import SubsystemSolver
 from quatrex.core.statistics import fermi_dirac
 
-from quatrex.core.coo import COOBatch
+from qttools.datastructures.coogroup import COOGroup
 
 
 class ElectronSolver(SubsystemSolver):
@@ -15,87 +15,49 @@ class ElectronSolver(SubsystemSolver):
 
     system = "electron"
 
-    def __init__(
-        self,
-        config: QuatrexConfig,
-        sigma_lesser: sparse.coo_array | None = None,
-        sigma_greater: sparse.coo_array | None = None,
-        **kwargs,
-    ) -> None:
+    def __init__(self, config: QuatrexConfig, **kwargs) -> None:
         """Initializes the solver."""
         super().__init__(config)
 
-        self.hamiltonian = sparse.load_npz(config.input_dir / "hamiltonian.npz")
+        self.hamiltonian: sparse.coo_array = sparse.load_npz(
+            config.input_dir / "hamiltonian.npz"
+        ).tocoo()
         potential = np.load(config.input_dir / "potential.npy")
-
         self.potential = sparse.diags(potential, format="coo")
 
-        self.sigma_lesser = sigma_lesser
-        self.sigma_greater = sigma_greater
+        self.eta = config.electron.eta
 
     def apply_obc(
         self,
-        system_matrices: COOBatch,
+        system_matrices: COOGroup,
         return_sigma_obc: bool = False,
         occupancies_l: tuple[float, float] = None,
         occupancies_g: tuple[float, float] = None,
     ) -> tuple[COOBatch, COOBatch | None, COOBatch | None]:
-        """Applies the OBC to the system matrix.
+        """Applies the OBC to the system matrix."""
 
-        Parameters
-        ----------
-        m : bsp.BSparse
-            The system matrix.
-        return_sigma_lesser : bool
-            If True, the lesser boundary self-energy is returned.
-        occupancies_l : tuple[float, float]
-            The lesser left and right occupancies at the energy point.
-        occupancies_g : tuple[float, float]
-            The greater left and right occupancies at the energy point.
+        m_01 = system_matrices.get_block(0, 1)
+        m_10 = system_matrices.get_block(1, 0)
+        m_nm = system_matrices.get_block(-1, -2)
+        m_mn = system_matrices.get_block(-2, -1)
 
-        Returns
-        -------
-        m : bsp.BSparse
-            The system matrix with OBC applied.
-        sigma_lesser : bsp.BSparse
-            The lesser boundary self-energy.
-        sigma_greater : bsp.BSparse
-            The greater boundary self-energy.
+        m_00 = system_matrices.get_block(0, 0)
+        m_nn = system_matrices.get_block(-1, -1)
 
-        """
-        ir = self.interaction_range
+        m_00_temp = np.array([m + 1j * self.eta * np.eye(*m.shape) for m in m_00])
+        m_nn_temp = np.array([m + 1j * self.eta * np.eye(*m.shape) for m in m_nn])
 
-        m_01 = m[:ir, ir : 2 * ir].toarray()
-        m_10 = m[ir : 2 * ir, :ir].toarray()
-        m_nm = m[-ir:, -2 * ir : -ir].toarray()
-        m_mn = m[-2 * ir : -ir, -ir:].toarray()
-
-        m_00 = m[:ir, :ir].toarray()
-        m_nn = m[-ir:, -ir:].toarray()
-
-        g_00 = self.obc(
-            m_00 + 1j * self.eta * np.eye(*m_00.shape), m_01, m_10, side="left"
-        )
-        g_nn = self.obc(
-            m_nn + 1j * self.eta * np.eye(*m_nn.shape), m_nm, m_mn, side="right"
-        )
+        g_00 = self.obc(m_00_temp, m_01, m_10, side="left")
+        g_nn = self.obc(m_nn_temp, m_nm, m_mn, side="right")
 
         sigma_obc_00 = m_10 @ g_00 @ m_01
         sigma_obc_nn = m_mn @ g_nn @ m_nm
 
-        # Apply self-energy. This is an issue with bsparse.
-        for row, col in np.ndindex(ir, ir):
-            m[row, col] -= sigma_obc_00[
-                row * m[0, 0].shape[0] : (row + 1) * m[0, 0].shape[0],
-                col * m[0, 0].shape[1] : (col + 1) * m[0, 0].shape[1],
-            ]
-            m[-ir + row, -ir + col] -= sigma_obc_nn[
-                row * m[0, 0].shape[0] : (row + 1) * m[0, 0].shape[0],
-                col * m[0, 0].shape[1] : (col + 1) * m[0, 0].shape[1],
-            ]
+        system_matrices.set_block(0, 0, m_00 - sigma_obc_00)
+        system_matrices.set_block(-1, -1, m_nn - sigma_obc_nn)
 
         if not return_sigma_obc:
-            return m
+            return system_matrices
 
         if occupancies_l is None or occupancies_g is None:
             raise ValueError("Occupancies must be set to compute sigma_lesser.")
@@ -106,34 +68,24 @@ class ElectronSolver(SubsystemSolver):
         sigma_g_obc_00 = -m_10 @ (occupancies_g[0] * (g_00.conj().T - g_00)) @ m_01
         sigma_g_obc_nn = -m_mn @ (occupancies_g[-1] * (g_nn.conj().T - g_nn)) @ m_nm
 
-        sigma_l_obc = m.copy() * 0.0
-        sigma_g_obc = m.copy() * 0.0
-        # Construct self-energy. This is an issue with bsparse.
-        for row, col in np.ndindex(ir, ir):
-            sigma_l_00_rc = sigma_l_obc_00[
-                row * m[0, 0].shape[0] : (row + 1) * m[0, 0].shape[0],
-                col * m[0, 0].shape[1] : (col + 1) * m[0, 0].shape[1],
-            ]
-            sigma_l_nn_rc = sigma_l_obc_nn[
-                row * m[0, 0].shape[0] : (row + 1) * m[0, 0].shape[0],
-                col * m[0, 0].shape[1] : (col + 1) * m[0, 0].shape[1],
-            ]
-            sigma_g_00_rc = sigma_g_obc_00[
-                row * m[0, 0].shape[0] : (row + 1) * m[0, 0].shape[0],
-                col * m[0, 0].shape[1] : (col + 1) * m[0, 0].shape[1],
-            ]
-            sigma_g_nn_rc = sigma_g_obc_nn[
-                row * m[0, 0].shape[0] : (row + 1) * m[0, 0].shape[0],
-                col * m[0, 0].shape[1] : (col + 1) * m[0, 0].shape[1],
-            ]
+        sigma_l_obc = COOGroup(
+            self.n_energies_per_rank,
+            rows=self.hamiltonian.row,
+            cols=self.hamiltonian.col,
+        )
+        sigma_g_obc = COOGroup(
+            self.n_energies_per_rank,
+            rows=self.hamiltonian.row,
+            cols=self.hamiltonian.col,
+        )
 
-            sigma_l_obc[row, col] = sigma_l_00_rc
-            sigma_l_obc[-ir + row, -ir + col] = sigma_l_nn_rc
+        sigma_l_obc.set_block(0, 0, sigma_l_obc_00)
+        sigma_l_obc.set_block(-1, -1, sigma_l_obc_nn)
 
-            sigma_g_obc[row, col] = sigma_g_00_rc
-            sigma_g_obc[-ir + row, -ir + col] = sigma_g_nn_rc
+        sigma_g_obc.set_block(0, 0, sigma_g_obc_00)
+        sigma_g_obc.set_block(-1, -1, sigma_g_obc_nn)
 
-        return m, sigma_l_obc, sigma_g_obc
+        return system_matrices, sigma_l_obc, sigma_g_obc
 
     def assemble_system_matrix(self, energy: float) -> bsp.BSparse:
         """Assembles the system matrix for a given energy.

@@ -4,16 +4,7 @@ from quatrex.core.config import QuatrexConfig
 from quatrex.electron.sigma_phonon import SigmaPhonon
 from quatrex.electron.electron_solver import ElectronSolver
 
-from quatrex.core.coo import COOBatch
-
-
-@dataclass
-class SCBAState:
-    sigma_phonon: SigmaPhonon | None = None
-    electron_solver: ElectronSolver | None = None
-
-    # pi_electron: PiElectron | None = None
-    # phonon_solver: PhononSolver | None = None
+from qttools.datastructures.coogroup import COOGroup
 
 
 class SCBA:
@@ -26,95 +17,106 @@ class SCBA:
 
     """
 
-    def __init__(self, config: QuatrexConfig) -> None:
-        self.config = config
+    def __init__(self, config: QuatrexConfig):
+        # self.config = config
+        self.electron_solver = ElectronSolver(config)
 
-        self.electron_solver = None
-        self.sigma_phonon = None
-
-    def _warm_up_iteration(self) -> SCBAState:
-        """Performs a warm-up iteration to compute the starting self-energy."""
-
-        electron_solver = ElectronSolver(self.config, cli=True)
-        g_lesser, g_greater = electron_solver.solve_lesser_greater()
-
-        sigma_lesser = COOBatch(
-            electron_solver.n_energies_per_rank, electron_solver.nnz
+        self.sigma_lesser = COOGroup(
+            self.electron_solver.n_energies_per_rank,
+            rows=self.electron_solver.hamiltonian.row,
+            cols=self.electron_solver.hamiltonian.col,
+            pinned=True,
         )
-        sigma_greater = COOBatch(
-            electron_solver.n_energies_per_rank, electron_solver.nnz
+        self.sigma_greater = COOGroup(
+            self.electron_solver.n_energies_per_rank,
+            rows=self.electron_solver.hamiltonian.row,
+            cols=self.electron_solver.hamiltonian.col,
+            pinned=True,
+        )
+        self.g_lesser = COOGroup(
+            self.electron_solver.n_energies_per_rank,
+            rows=self.electron_solver.hamiltonian.row,
+            cols=self.electron_solver.hamiltonian.col,
+            pinned=True,
+        )
+        self.g_greater = COOGroup(
+            self.electron_solver.n_energies_per_rank,
+            rows=self.electron_solver.hamiltonian.row,
+            cols=self.electron_solver.hamiltonian.col,
+            pinned=True,
         )
 
-        scba = SCBAState()
+        if config.scba.phonon:
 
-        if self.config.scba.phonon:
-            if self.config.phonon.model == "greens_function":
+            self.sigma_phonon = SigmaPhonon(config)
+
+            if self.sigma_phonon.model == "greens-function":
                 raise NotImplementedError
 
-            elif self.config.phonon.model == "deformation_potential":
-                phonon_self_energy = SigmaPhonon(self.config, g_lesser, g_greater)
+            elif self.sigma_phonon.model == "pseudo-scattering":
+                ...
 
-                scba.sigma_phonon = phonon_self_energy
+        self.mix = config.scba.mixing_factor
+        self.max_iterations = config.scba.max_iterations
 
-                sigma_phonon_lesser, sigma_phonon_greater = scba.sigma_phonon.compute()
+    def _converged(self, *arg) -> bool:
+        # Compute difference between current and preceeding self-energy.
+        # sigma_retarded = 0.5 * (sigma_greater - sigma_lesser)
+        # prev_sigma_retarded = 0.5 * (
+        #     self.electron_solver.sigma_greater - self.electron_solver.sigma_lesser
+        # )
+        # diff_causal = sigma_retarded - prev_sigma_retarded
 
-                sigma_lesser += sigma_phonon_lesser
-                sigma_greater += sigma_phonon_greater
-
-        electron_solver.sigma_lesser = sigma_lesser
-        electron_solver.sigma_greater = sigma_greater
-
-        scba.electron_solver = electron_solver
-
-        return scba
+        # abs_norm_diff_causal = npla.norm(diff_causal)
+        # rel_norm_diff_causal = abs_norm_diff_causal / npla.norm(sigma_retarded)
+        return False
 
     def run(self) -> None:
 
-        scba = self._warm_up_iteration(self.config)
+        sigma_lesser = COOGroup(
+            self.electron_solver.n_energies_per_rank,
+            rows=self.electron_solver.hamiltonian.row,
+            cols=self.electron_solver.hamiltonian.col,
+        )
+        sigma_greater = COOGroup(
+            self.electron_solver.n_energies_per_rank,
+            rows=self.electron_solver.hamiltonian.row,
+            cols=self.electron_solver.hamiltonian.col,
+        )
 
-        for __ in range(1, self.config.scba.max_iterations + 1):
-            g_lesser, g_greater = scba.electron_solver.solve_lesser_greater()
+        for __ in range(self.max_iterations):
+            # Reset the self-energy.
+            self.g_lesser.data[:], self.g_greater.data[:] = (
+                self.electron_solver.solve_lesser_greater(
+                    self.sigma_lesser, self.sigma_greater
+                )
+            )
 
-            sigma_lesser = None
-            sigma_greater = None
-
-            if self.config.scba.phonon:
-                if self.config.phonon.model == "greens_function":
+            sigma_lesser.data[:] = 0.0
+            sigma_greater.data[:] = 0.0
+            if hasattr(self, "sigma_phonon"):
+                if self.sigma_phonon.model == "greens-function":
                     raise NotImplementedError
 
-                elif self.config.phonon.model == "deformation_potential":
-                    scba.sigma_phonon.g_lesser = g_lesser
-                    scba.sigma_phonon.g_greater = g_greater
-
+                elif self.sigma_phonon.model == "pseudo-scattering":
                     sigma_phonon_lesser, sigma_phonon_greater = (
-                        scba.sigma_phonon.compute()
+                        self.sigma_phonon.pseudo_scattering(
+                            self.g_lesser, self.g_greater
+                        )
                     )
 
-                    sigma_lesser += sigma_phonon_lesser
-                    sigma_greater += sigma_phonon_greater
-
-            # Compute difference between current and preceeding self-energy.
-            sigma_retarded = 0.5 * (sigma_greater - sigma_lesser)
-
-            prev_sigma_retarded = 0.5 * (
-                scba.electron_solver.sigma_greater - scba.electron_solver.sigma_lesser
-            )
-
-            diff_causal = sigma_retarded - prev_sigma_retarded
-
-            abs_norm_diff_causal = npla.norm(diff_causal)
-            rel_norm_diff_causal = abs_norm_diff_causal / npla.norm(sigma_retarded)
+                sigma_lesser.data[:] += sigma_phonon_lesser.data
+                sigma_greater.data[:] += sigma_phonon_greater.data
 
             # Update self-energy.
-            m = self.config.scba.mixing_factor
-            scba.electron_solver.sigma_lesser = (
-                m * scba.electron_solver.sigma_lesser + (1 - m) * sigma_lesser
+            self.sigma_lesser[:] = (
+                self.mix * self.sigma_lesser + (1 - self.mix) * sigma_lesser
             )
-            scba.electron_solver.sigma_greater = (
-                m * scba.electron_solver.sigma_greater + (1 - m) * sigma_greater
+            self.sigma_greater[:] = (
+                self.mix * self.sigma_greater + (1 - self.mix) * sigma_greater
             )
 
-            if rel_norm_diff_causal < self.config.scba.tolerance:
+            if self._converged():
                 print(f"SCBA converged after {__} iterations.")
                 break
 

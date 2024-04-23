@@ -1,6 +1,7 @@
 from scipy.sparse import coo_array
 
 from quatrex.core.config import QuatrexConfig
+from qttools.datastructures.coogroup import COOGroup
 
 
 class SigmaPhonon:
@@ -48,12 +49,15 @@ class SigmaPhonon:
     ) -> None:
         """Initializes the self-energy."""
         self.model = config.phonon.model
+        self.deformation_potential = config.phonon.deformation_potential
+        self.energy = config.phonon.energy
 
         self.g_lesser = g_lesser
         self.g_greater = g_greater
 
-    def compute(self, parallel: bool = False) -> np.ndarray:
-        """Compute the electron-photon self-energy.
+    def pseudo_scattering(self) -> COOGroup:
+        """Computes the electron-photon self-energy using the pseudo-scattering
+        model.
 
         Returns
         -------
@@ -61,7 +65,9 @@ class SigmaPhonon:
             The electron-photon self-energy.
 
         """
-        if self.model == "greens_function":
-            raise NotImplementedError("Greens function method not implemented.")
-        elif self.model == "deformation_potential":
-            return self._quasi()
+        # TODO: Implement the pseudo-scattering model.
+        ...
+
+    def greens_function(self, parallel: bool = False) -> COOGroup:
+
+        raise NotImplementedError("Greens function method not implemented.")

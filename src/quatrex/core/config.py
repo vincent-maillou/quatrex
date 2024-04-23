@@ -31,10 +31,11 @@ class OBCConfig(BaseModel):
 class ElectronConfig(BaseModel):
     eta: float = 1e-6  # eV
 
-    fermi_level: float = 0.0  # eV
-    fermi_level_splitting = 0.0  # eV
+    # intrinsic_fermi_level: float = 0.0  # eV
+    left_fermi_level: float = 0.0  # eV
+    right_fermi_level: float = 0.0  # eV
 
-    solver: str = "dense_inv"
+    solver: str = "inv"
 
     obc: OBCConfig = OBCConfig()
 
@@ -43,10 +44,13 @@ class PhononConfig(BaseModel):
     energy_range: list[float]
     energy_step: float = 1e-3  # eV
 
-    solver: str = "dense_inv"
+    solver: str = "inv"
 
-    # "greens_function" or "deformation_potential"
-    model: str = "deformation_potential"
+    # "greens-function" or "pseudo-scattering"
+    model: str = "pseudo-scattering"
+
+    deformation_potential: float = 25e-3  # eV
+    energy: float = 50e-3  # eV
 
     obc: OBCConfig = OBCConfig()
 
@@ -56,6 +60,8 @@ class QuatrexConfig(BaseModel):
 
     electron: ElectronConfig
     phonon: PhononConfig
+
+    scba: SCBAConfig
 
     # --- Directory paths ----------------------------------------------
     simulation_dir: Path = Path("./quatrex/")

@@ -1,4 +1,4 @@
-# Copyright 2023-2024 ETH Zurich and QuaTrEx authors. All rights reserved.
+
 name: Run Tests and Determine Code Coverage
 
 on: [push, pull_request, workflow_dispatch]
@@ -44,6 +44,6 @@ jobs:
         uses: codecov/codecov-action@v4.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: vincent-maillou/QuaTrEx
+          slug: vincent-maillou/quatrex
 
 

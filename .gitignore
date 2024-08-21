@@ -162,3 +162,7 @@ cython_debug/
 # System
 gmon.out
 dev/
+
+# Example outputs
+**/outputs/*
+hostfile

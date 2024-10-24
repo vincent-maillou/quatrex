@@ -27,3 +27,5 @@ if __name__ == "__main__":
         np.save(f"{output_dir}/electron_ldos.npy", scba.observables.electron_ldos)
         np.save(f"{output_dir}/electron_density.npy", scba.observables.electron_density)
         np.save(f"{output_dir}/hole_density.npy", scba.observables.hole_density)
+        np.save(f"{output_dir}/i_left.npy", scba.observables.electron_current["left"])
+        np.save(f"{output_dir}/i_right.npy", scba.observables.electron_current["right"])

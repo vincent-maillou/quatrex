@@ -5,7 +5,7 @@ max_iterations = 1
 
 [electron]
 fermi_level = -4.0
-solver = "inv"
+solver = "rgf"
 
 [electron.obc]
 algorithm = "sancho-rubio"
